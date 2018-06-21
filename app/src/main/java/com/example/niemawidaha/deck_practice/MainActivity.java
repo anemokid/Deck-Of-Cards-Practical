@@ -4,6 +4,7 @@ import android.net.Uri;
 import android.os.StrictMode;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.View;
@@ -12,6 +13,11 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.example.niemawidaha.deck_practice.controller.CardDeckAdapter;
+import com.example.niemawidaha.deck_practice.model.CardModel;
+import com.google.gson.JsonArray;
+
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -25,7 +31,7 @@ import java.net.URI;
 import java.net.URL;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements CardDeckAdapter.ItemClickListener {
 
     // private members:
     private final static String LOG_TAG = "LOG_TAG: Main Activity";
@@ -33,9 +39,11 @@ public class MainActivity extends AppCompatActivity {
     private Button m_btn_ShuffleNewDeck;
     private EditText m_et_SpecifiedCards;
     private Button m_btn_DrawCards;
-    private RecyclerView mCardDeckRecyclerView;
+    private CardDeckAdapter mCardDeckAdapter;
+
 
     // values:
+    private List<CardModel> cardDeck;
     private String deck_id; // stores the DECK ID
     private int currentCount; // stores the current count of the remaining cards
     private int remainingCards = 52; // stores the DECK ID
@@ -51,7 +59,6 @@ public class MainActivity extends AppCompatActivity {
     final String QUERY_PARAM = "count"; // Parameter for the search string
 
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -61,8 +68,7 @@ public class MainActivity extends AppCompatActivity {
         findViews();
 
         //buildUp52CardsURI(); // builds a URI for the 52 cards
-        if (android.os.Build.VERSION.SDK_INT > 9)
-        {
+        if (android.os.Build.VERSION.SDK_INT > 9) {
             StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
             StrictMode.setThreadPolicy(policy);
         }
@@ -76,9 +82,8 @@ public class MainActivity extends AppCompatActivity {
         m_btn_ShuffleNewDeck = findViewById(R.id.btn_shuffle_new_deck);
         m_et_SpecifiedCards = findViewById(R.id.et_draw_cards);
         m_btn_DrawCards = findViewById(R.id.btn_display_drawn_cards);
-        mCardDeckRecyclerView = findViewById(R.id.rv_user_cards);
 
-        //setUpRV();
+        setUpRV();
     }
 
 
@@ -89,21 +94,20 @@ public class MainActivity extends AppCompatActivity {
 
         // set up RV:
         int numOfColumns = 2;
-        //cardDeckRecyclerView.setLayoutManager(new GridLayoutManager(this, numOfColumns));
 
-        // cardDeckAdapter = new CardDeckAdapter(this, currentDeckOfCards)
-        // cardDeckAdapter.setClickListener(this);
-        // cardDeckRecyclerView.setAdapter(adapter);
+        RecyclerView recyclerView = findViewById(R.id.rv_user_cards);
+        recyclerView.setLayoutManager(new GridLayoutManager(this, numOfColumns));
+        mCardDeckAdapter = new CardDeckAdapter(this, cardDeck);
+        mCardDeckAdapter.setClickListener(this);
+
 
 
     }
 
-    /**
-     * grabs the values from the edit text and checks if its a valid number
-     * - if it is then the value will be stored in a global count.
-     * @param view
-     */
-    //public boolean drawDeckCheck(View view) {
+    @Override
+    public void onItemClick(View view, int position) {
+        Log.i("TAG", "You clicked card " + mCardDeckAdapter.getItem(position) );
+    }
 
 
     //}
@@ -137,13 +141,13 @@ public class MainActivity extends AppCompatActivity {
         int numOfUserSelection = Integer.valueOf(m_et_SpecifiedCards.getText().toString()); // the value specified by the user on correct check:
 
 
-        if (isCardDeckSelectedEmpty(m_et_SpecifiedCards) || (numOfUserSelection < 0 )){
+        if (isCardDeckSelectedEmpty(m_et_SpecifiedCards) || (numOfUserSelection < 0)) {
 
             Toast.makeText(MainActivity.this, "You must draw atleast one card", Toast.LENGTH_LONG).show();
 
             isUserValueValid = false;
 
-        } else if ( numOfUserSelection > remainingCards) {
+        } else if (numOfUserSelection > remainingCards) {
 
             String error = "There are only " + String.valueOf(remainingCards) + " cards remaining";
             Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
@@ -225,6 +229,49 @@ public class MainActivity extends AppCompatActivity {
         String cardDeck52Response = downloadUrl(cardDeck52URL);
 
 
+        try {
+            JSONObject fullData = new JSONObject(cardDeck52Response); // gets the full json object
+
+            // to get the cards json array:
+            JSONArray fiftyTwoCards = new JSONArray(fullData.getJSONArray("cards"));
+
+            // get the JSON OBJECT: card deck of 52 cards:
+            // for a single card:
+
+            // since u have a list of cards:
+            for ( int i = 0 ; i < 52; i ++ ) {
+                for (CardModel card : cardDeck) {
+
+                    // create a json object and get the values from the json array:
+                    JSONObject cardJSON = fiftyTwoCards.getJSONObject(i);
+
+                    // get these specific values from the json object
+                    String suit = cardJSON.getString("suit"); // suit
+                    String image = cardJSON.getString("image"); // image
+                    String code = cardJSON.getString("code");// code
+                    String value = cardJSON.getString("value");// value
+
+                    // add the values to the card:
+                    card.setSuit(suit);
+                    card.setImage(image);
+                    card.setCode(code);
+                    card.setValue(value);
+
+                    // add the card to the list
+                    cardDeck.add(card);
+
+                    // data supposedely full
+                }
+
+            }  // ends try catch
+
+            deck_id = fullData.getString("deck_id");
+
+            m_tv_NumberOfCardsRemaining.setText(deck_id);
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -237,7 +284,6 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * downloadURL():
-     *
      */
     public String downloadUrl(String cardDeckUrl) throws IOException {
 
@@ -285,7 +331,7 @@ public class MainActivity extends AppCompatActivity {
      * the activity can display it, the method uses an InputStreamReader instance
      * to read bytes and decode them into characters.
      */
-    public String convertInputToString(InputStream stream, int length) throws IOException{
+    public String convertInputToString(InputStream stream, int length) throws IOException {
 
         Reader reader = null;
 
@@ -304,7 +350,8 @@ public class MainActivity extends AppCompatActivity {
     /**
      * this method builds up the Query URI, limiting results to 52 cards
      */
-    public void buildUp52CardsURI(){
+    public void buildUp52CardsURI() {
 
     }
+
 }
